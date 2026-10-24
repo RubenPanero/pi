@@ -22,7 +22,7 @@ export type AssignPlan =
 export function assignJson(target: JsonContainer, key: string | number, value: JsonValue, plan?: AssignPlan): void {
 	if (plan?.kind === "keep") return;
 	const slots = target as Record<string | number, JsonValue>;
-	const current = slots[key];
+	const current = Object.hasOwn(slots, key) ? slots[key] : undefined;
 	const fields = plan?.kind === "fields" ? plan.fields : undefined;
 	if (isRecord(current) && isRecord(value)) {
 		for (const name of Object.keys(current)) if (!Object.hasOwn(value, name)) delete current[name];
@@ -48,7 +48,14 @@ export function assignJson(target: JsonContainer, key: string | number, value: J
 		appendText(target as Draft<Record<string, string>>, String(key), plan.text);
 		return;
 	}
-	if (current !== value) slots[key] = value;
+	if (current !== value) {
+		// An unowned __proto__ assignment would invoke Object.prototype's setter instead of storing JSON data.
+		if (key === "__proto__" && !Object.hasOwn(slots, key)) {
+			Object.defineProperty(slots, key, { value, writable: true, enumerable: true, configurable: true });
+		} else {
+			slots[key] = value;
+		}
+	}
 }
 
 function isRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
